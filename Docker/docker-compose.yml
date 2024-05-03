@@ -1,0 +1,44 @@
+version: '3'
+
+services:
+  wordpress:
+    image: wordpress:latest
+    container_name: wordpress-container
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_USER: MYSQL_USER
+      WORDPRESS_DB_PASSWORD: MYSQL_RANDOM_ROOT_PASSWORD
+      WORDPRESS_DB_NAME: MYSQL_DATABASE
+    volumes:
+      - /home/nginx/wordpress-html:/var/www/html
+    depends_on:
+      - db
+    ports:
+      - "50001:80"
+    restart: always
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == nginx
+
+  db:
+    image: mysql:latest
+    container_name: mysql-container
+    environment:
+      MYSQL_DATABASE: MYSQL_DATABASE
+      MYSQL_USER: MYSQL_USER
+      MYSQL_PASSWORD: MYSQL_RANDOM_ROOT_PASSWORD
+      MYSQL_RANDOM_ROOT_PASSWORD: "1"
+    volumes:
+      - /home/nginx/mysql-data:/var/lib/mysql
+    restart: always
+    ports:
+      - "3306:3306"
+    deploy:
+      placement:
+        constraints:
+          - node.hostname == nginx
+
+volumes:
+  wordpress-html:
+  mysql-data:

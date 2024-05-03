@@ -1,0 +1,131 @@
+# Service Manifest
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress
+spec:
+  type: NodePort
+  ports:
+    - port: 8081
+      targetPort: 80
+      nodePort: 30000
+      name: http
+      protocol: TCP
+  selector:
+    app: wordpress
+status:
+  loadBalancer: {}
+
+---
+
+# Deployment Manifest
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress
+  labels:
+    app: wordpress
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: wordpress
+      app: wordpress
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        name: wordpress
+        app: wordpress
+    spec:
+      containers:
+        - env:
+            - name: WORDPRESS_DB_HOST
+              value: db
+            - name: WORDPRESS_DB_NAME
+              value: MYSQL_DATABASE
+            - name: WORDPRESS_DB_PASSWORD
+              value: MYSQL_RANDOM_ROOT_PASSWORD
+            - name: WORDPRESS_DB_USER
+              value: MYSQL_USER
+          image: wordpress:latest
+          name: wordpress
+          ports:
+            - containerPort: 80
+          resources: 
+            requests:
+            limits:
+              cpu: "1200Mi"
+              memory: "32Gi"
+          volumeMounts:
+            - mountPath: /var/www/html
+              name: wordpress-volume  # Nome do volume no pod
+      restartPolicy: Always
+      volumes:
+        - name: wordpress-volume
+          hostPath:
+            path: /mnt/wordpress-html
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: wordpress-data-pv
+spec:
+  capacity:
+    storage: 50Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /mnt/wordpress-html
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+ name: wordpress-data-pvc
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: wordpress
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: wordpress
+  minReplicas: 1
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - periodSeconds: 15
+          type: Pods
+          value: 2
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - periodSeconds: 15
+          type: Pods
+          value: 1
