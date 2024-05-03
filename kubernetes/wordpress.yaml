@@ -55,9 +55,9 @@ spec:
             - containerPort: 80
           resources: 
             requests:
+              memory: "512Mi"
             limits:
-              cpu: "1200Mi"
-              memory: "32Gi"
+              memory: 16Gi
           volumeMounts:
             - mountPath: /var/www/html
               name: wordpress-volume  # Nome do volume no pod
