@@ -1,127 +1,96 @@
-apiVersion: v1
-kind: Service
-metadata:
-  name: wordpress
-spec:
-  type: NodePort
-  ports:
-    - port: 50001
-      targetPort: 80
-      nodePort: 30000
-      name: http
-      protocol: TCP
-  selector:
-    app: wordpress
-status:
-  loadBalancer: {}
-
----
-
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: wordpress
+  annotations:
+    kompose.cmd: kompose convert
+    kompose.version: 1.22.0 (955b78124)
   labels:
-    app: wordpress
+    io.kompose.service: db
+  name: db
 spec:
   replicas: 1
   selector:
     matchLabels:
-      name: wordpress
-      app: wordpress
+      io.kompose.service: db
   strategy:
     type: Recreate
   template:
     metadata:
+      annotations:
+        kompose.cmd: kompose convert
+        kompose.version: 1.22.0 (955b78124)
       labels:
-        name: wordpress
-        app: wordpress
+        io.kompose.service: db
     spec:
       containers:
         - env:
-            - name: WORDPRESS_DB_HOST
-              value: db
-            - name: WORDPRESS_DB_NAME
+            - name: MYSQL_DATABASE
               value: MYSQL_DATABASE
-            - name: WORDPRESS_DB_PASSWORD
-              value: MYSQL_RANDOM_ROOT_PASSWORD
-            - name: WORDPRESS_DB_USER
+            - name: MYSQL_USER
               value: MYSQL_USER
-          image: wordpress:latest
-          name: wordpress
+            - name: MYSQL_PASSWORD
+              value: MYSQL_RANDOM_ROOT_PASSWORD
+            - name: MYSQL_RANDOM_ROOT_PASSWORD
+              value: "1"
+          image: mysql:latest
+          name: mysql-container
           ports:
-            - containerPort: 80
-          resources:
-            requests:
-              memory: 1200Mi
-            limits:
-              memory: "32Gi"
+            - containerPort: 3306
+          resources: {}
           volumeMounts:
-            - mountPath: /var/www/html
-              name: wordpress-volume
+            - mountPath: /var/lib/mysql
+              name: mysql-data
       restartPolicy: Always
       volumes:
-        - name: wordpress-volume
+        - name: mysql-data
           hostPath:
-            path: /mnt/wordpress-html
+            path: /mnt/mysql-data
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    kompose.cmd: kompose convert
+    kompose.version: 1.22.0 (955b78124)
+  labels:
+    io.kompose.service: db
+  name: db
+spec:
+  selector:
+    io.kompose.service: db
+  ports:
+    - port: 3306
+      targetPort: 3306
+      name: db
+      protocol: TCP
+status:
+  loadBalancer: {}
 
 ---
 
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: wordpress-data-pv
+  name: mysql-data-pv
 spec:
   capacity:
     storage: 50Gi
   accessModes:
     - ReadWriteOnce
   hostPath:
-    path: /mnt/wordpress-html
+    path: /mnt/mysql-data
 
 ---
 
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: wordpress-data-pvc
+  name: mysql-data-pvc
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: 50Gi
-
----
-
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: wordpress
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: wordpress
-  minReplicas: 2
-  maxReplicas: 20
-  metrics:
-    - type: Resource
-      resource:
-        name: memory
-        target:
-          type: Utilization
-          averageUtilization: 80
-  behavior:
-    scaleUp:
-      stabilizationWindowSeconds: 0
-      policies:
-        - periodSeconds: 15
-          type: Pods
-          value: 2
-    scaleDown:
-      stabilizationWindowSeconds: 300
-      policies:
-        - periodSeconds: 15
-          type: Pods
-          value: 1
